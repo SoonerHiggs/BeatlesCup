@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matchday — Beatles Radio Elo Tracker</title>
+<link rel="icon" href="data:,">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Spectral:wght@400;500;600&family=Spectral+SC:wght@600&display=swap');
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  --ink: #14213d;
+  --ink-soft: #2c3a5e;
+  --paper: #f4ecd8;
+  --paper-dim: #e9dfc6;
+  --gold: #c99a2e;
+  --pitch: #1f5c3f;
+  --red: #a83232;
+  --line: rgba(20,33,61,0.18);
+  font-family: 'Spectral', Georgia, serif;
+  color: var(--ink);
+  background: var(--paper);
+  background-image: radial-gradient(circle at 1px 1px, rgba(20,33,61,0.05) 1px, transparent 0);
+  background-size: 14px 14px;
+}
+
+.bmd { padding: 28px 22px 60px; max-width: 760px; margin: 0 auto; }
+
+.bmd-header { text-align: center; border-bottom: 3px double var(--ink); padding-bottom: 16px; margin-bottom: 22px; }
+.bmd-eyebrow { font-family: 'Spectral SC', serif; letter-spacing: 0.22em; font-size: 11px; color: var(--gold); text-transform: uppercase; margin-bottom: 4px; }
+.bmd-title { font-family: 'Anton', sans-serif; font-size: 40px; letter-spacing: 0.02em; line-height: 1; margin: 4px 0 6px; }
+.bmd-sub { font-size: 13px; color: var(--ink-soft); font-style: italic; }
+
+.bmd-account { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--ink-soft); }
+.bmd-account img { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--ink); }
+.bmd-account button { background: none; border: none; color: var(--red); text-decoration: underline; cursor: pointer; font-size: 12px; font-family: 'Spectral', serif; }
+
+.bmd-signin-card { text-align: center; padding: 50px 20px; border: 1.5px solid var(--ink); background: var(--paper); box-shadow: 4px 4px 0 var(--line); }
+.bmd-signin-card p { color: var(--ink-soft); font-size: 14px; margin-bottom: 22px; }
+.bmd-google-btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 11px 22px; font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 0.08em;
+  background: var(--ink); color: var(--paper); border: none; cursor: pointer;
+}
+.bmd-google-btn:hover { background: var(--pitch); }
+.bmd-google-btn svg { width: 18px; height: 18px; }
+
+.bmd-card { background: var(--paper); border: 1.5px solid var(--ink); box-shadow: 4px 4px 0 var(--line); padding: 20px; margin-bottom: 22px; }
+.bmd-card-title { font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 0.14em; color: var(--pitch); border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 14px; }
+
+.bmd-fixture { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: start; }
+.bmd-slot { position: relative; }
+.bmd-slot-label { font-family: 'Spectral SC', serif; font-size: 10px; letter-spacing: 0.14em; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 4px; display: block; }
+.bmd-search { width: 100%; padding: 9px 10px; font-family: 'Spectral', serif; font-size: 14px; border: 1px solid var(--ink); background: #fff; color: var(--ink); }
+.bmd-search:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+.bmd-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid var(--ink); border-top: none; max-height: 180px; overflow-y: auto; z-index: 20; }
+.bmd-opt { padding: 7px 10px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.bmd-opt:hover { background: var(--paper-dim); }
+.bmd-opt small { color: var(--ink-soft); display: block; font-size: 11px; }
+
+.bmd-vs { font-family: 'Anton', sans-serif; font-size: 22px; color: var(--gold); align-self: center; margin-top: 22px; text-align: center; }
+
+.bmd-picked { margin-top: 10px; padding: 10px; background: var(--paper-dim); border-left: 3px solid var(--pitch); font-size: 13px; min-height: 54px; }
+.bmd-picked .name { font-weight: 600; }
+.bmd-picked .meta { color: var(--ink-soft); font-size: 11px; }
+.bmd-picked .rating { color: var(--gold); font-size: 11px; margin-top: 2px; }
+.bmd-empty { color: var(--ink-soft); font-style: italic; font-size: 12px; }
+
+.bmd-score-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; margin-top: 16px; }
+.bmd-score-input { width: 100%; font-family: 'Anton', sans-serif; font-size: 32px; text-align: center; border: 2px solid var(--ink); background: var(--pitch); color: #fff; padding: 6px 0; }
+.bmd-dash { font-family: 'Anton', sans-serif; font-size: 26px; color: var(--ink-soft); text-align: center; margin-top: 6px; }
+
+.bmd-btn { display: block; width: 100%; margin-top: 16px; padding: 12px; font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 0.1em; background: var(--ink); color: var(--paper); border: none; cursor: pointer; }
+.bmd-btn:hover { background: var(--pitch); }
+.bmd-btn:disabled { background: var(--line); color: var(--ink-soft); cursor: not-allowed; }
+
+.bmd-flash { margin-top: 10px; font-size: 12px; text-align: center; color: var(--pitch); min-height: 16px; }
+
+.bmd-toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.bmd-toolbar input { flex: 1; min-width: 140px; padding: 7px 9px; border: 1px solid var(--ink); font-family: 'Spectral', serif; font-size: 13px; }
+.bmd-toolbar label { font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+
+table.bmd-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.bmd-table th { font-family: 'Spectral SC', serif; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; text-align: left; padding: 6px 5px; border-bottom: 2px solid var(--ink); color: var(--ink-soft); cursor: pointer; user-select: none; }
+table.bmd-table th.num, table.bmd-table td.num { text-align: center; }
+table.bmd-table td { padding: 6px 5px; border-bottom: 1px solid var(--line); }
+table.bmd-table tr:nth-child(1) td { font-weight: 600; }
+table.bmd-table .rank { color: var(--gold); font-family: 'Anton', sans-serif; width: 22px; }
+table.bmd-table .song-album { color: var(--ink-soft); font-size: 10.5px; }
+table.bmd-table .gd-pos { color: var(--pitch); }
+table.bmd-table .gd-neg { color: var(--red); }
+
+.bmd-log { max-height: 220px; overflow-y: auto; font-size: 12px; }
+.bmd-log-row { padding: 6px 2px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; }
+.bmd-log-row .lscore { font-family: 'Anton', sans-serif; color: var(--gold); white-space: nowrap; }
+.bmd-log-empty { color: var(--ink-soft); font-style: italic; font-size: 12px; padding: 6px 2px; }
+
+.bmd-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 11px; color: var(--ink-soft); flex-wrap: wrap; gap: 6px; }
+.bmd-footer button { background: none; border: none; color: var(--red); text-decoration: underline; cursor: pointer; font-size: 11px; font-family: 'Spectral', serif; }
+.bmd-loading { text-align: center; padding: 60px 0; color: var(--ink-soft); font-style: italic; }
+.bmd-config-warning { background: #fff3f3; border: 1.5px solid var(--red); color: var(--red); padding: 16px; margin: 40px auto; max-width: 600px; font-size: 14px; }
+.bmd-config-warning code { background: rgba(0,0,0,0.06); padding: 1px 4px; }
+</style>
+</head>
+<body>
+
+<div class="bmd" id="bmdRoot">
+  <div class="bmd-header">
+    <div class="bmd-eyebrow">SiriusXM &middot; The Beatles Channel</div>
+    <div class="bmd-title">MATCHDAY</div>
+    <div class="bmd-sub">Whatever plays next, goes head to head</div>
+    <div id="accountBar"></div>
+  </div>
+  <div class="bmd-loading" id="bmdLoading">Tuning in&hellip;</div>
+  <div id="bmdApp" style="display:none;"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
+  onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, collection, doc, onSnapshot, query, orderBy, limit,
+  runTransaction, getDocs, writeBatch
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAlmcB5zDpvgKd-0cOrS6kVQvwnPrzOyA4",
+  authDomain: "beatles-cup.firebaseapp.com",
+  projectId: "beatles-cup",
+  storageBucket: "beatles-cup.firebasestorage.app",
+  messagingSenderId: "1092731826238",
+  appId: "1:1092731826238:web:86c0b92b18cc33edbba16f"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+const START_ELO = 1500;
+const K = 32;
+
+const SONGS = [
+["Across the Universe","Let It Be"],["Act Naturally","Help!"],["All I've Got to Do","With the Beatles"],
+["All My Loving","With the Beatles"],["All Together Now","Yellow Submarine"],["All You Need Is Love","Magical Mystery Tour"],
+["And I Love Her","A Hard Day's Night"],["And Your Bird Can Sing","Revolver"],["Anna (Go to Him)","Please Please Me"],
+["Another Girl","Help!"],["Any Time at All","A Hard Day's Night"],["Ask Me Why","Please Please Me"],
+["Baby It's You","Please Please Me"],["Baby, You're a Rich Man","Magical Mystery Tour"],["Baby's in Black","Beatles for Sale"],
+["Back in the U.S.S.R.","The Beatles (White Album)"],["Bad Boy","Past Masters"],["The Ballad of John and Yoko","Past Masters"],
+["Because","Abbey Road"],["Being for the Benefit of Mr. Kite!","Sgt. Pepper's"],["Birthday","The Beatles (White Album)"],
+["Blackbird","The Beatles (White Album)"],["Blue Jay Way","Magical Mystery Tour"],["Boys","Please Please Me"],
+["Can't Buy Me Love","A Hard Day's Night"],["Carry That Weight","Abbey Road"],["Chains","Please Please Me"],
+["Come Together","Abbey Road"],["The Continuing Story of Bungalow Bill","The Beatles (White Album)"],["Cry Baby Cry","The Beatles (White Album)"],
+["A Day in the Life","Sgt. Pepper's"],["Day Tripper","Past Masters"],["Dear Prudence","The Beatles (White Album)"],
+["Devil in Her Heart","With the Beatles"],["Dig a Pony","Let It Be"],["Dig It","Let It Be"],
+["Dizzy Miss Lizzy","Help!"],["Do You Want to Know a Secret","Please Please Me"],["Doctor Robert","Revolver"],
+["Don't Bother Me","With the Beatles"],["Don't Let Me Down","Past Masters"],["Don't Pass Me By","The Beatles (White Album)"],
+["Drive My Car","Rubber Soul"],["Eight Days a Week","Beatles for Sale"],["Eleanor Rigby","Revolver"],
+["The End","Abbey Road"],["Every Little Thing","Beatles for Sale"],["Everybody's Got Something to Hide Except Me and My Monkey","The Beatles (White Album)"],
+["Everybody's Trying to Be My Baby","Beatles for Sale"],["Fixing a Hole","Sgt. Pepper's"],["Flying","Magical Mystery Tour"],
+["The Fool on the Hill","Magical Mystery Tour"],["For No One","Revolver"],["For You Blue","Let It Be"],
+["From Me to You","Past Masters"],["Get Back","Let It Be"],["Getting Better","Sgt. Pepper's"],
+["Girl","Rubber Soul"],["Glass Onion","The Beatles (White Album)"],["Golden Slumbers","Abbey Road"],
+["Good Day Sunshine","Revolver"],["Good Morning Good Morning","Sgt. Pepper's"],["Good Night","The Beatles (White Album)"],
+["Got to Get You into My Life","Revolver"],["Happiness Is a Warm Gun","The Beatles (White Album)"],["A Hard Day's Night","A Hard Day's Night"],
+["Hello, Goodbye","Magical Mystery Tour"],["Help!","Help!"],["Helter Skelter","The Beatles (White Album)"],
+["Her Majesty","Abbey Road"],["Here Comes the Sun","Abbey Road"],["Here, There and Everywhere","Revolver"],
+["Hey Bulldog","Yellow Submarine"],["Hey Jude","Past Masters"],["Hold Me Tight","With the Beatles"],
+["Honey Don't","Beatles for Sale"],["Honey Pie","The Beatles (White Album)"],["I Am the Walrus","Magical Mystery Tour"],
+["I Call Your Name","Past Masters"],["I Don't Want to Spoil the Party","Beatles for Sale"],["I Feel Fine","Past Masters"],
+["I Me Mine","Let It Be"],["I Need You","Help!"],["I Saw Her Standing There","Please Please Me"],
+["I Should Have Known Better","A Hard Day's Night"],["I Wanna Be Your Man","With the Beatles"],["I Want to Hold Your Hand","Past Masters"],
+["I Want to Tell You","Revolver"],["I Want You (She's So Heavy)","Abbey Road"],["I Will","The Beatles (White Album)"],
+["If I Fell","A Hard Day's Night"],["If I Needed Someone","Rubber Soul"],["I'll Be Back","A Hard Day's Night"],
+["I'll Cry Instead","A Hard Day's Night"],["I'll Follow the Sun","Beatles for Sale"],["I'll Get You","Past Masters"],
+["I'm a Loser","Beatles for Sale"],["I'm Down","Past Masters"],["I'm Happy Just to Dance with You","A Hard Day's Night"],
+["I'm Looking Through You","Rubber Soul"],["I'm Only Sleeping","Revolver"],["I'm So Tired","The Beatles (White Album)"],
+["I've Got a Feeling","Let It Be"],["I've Just Seen a Face","Help!"],["In My Life","Rubber Soul"],
+["The Inner Light","Past Masters"],["It Won't Be Long","With the Beatles"],["It's All Too Much","Yellow Submarine"],
+["It's Only Love","Help!"],["Julia","The Beatles (White Album)"],["Kansas City/Hey-Hey-Hey-Hey!","Beatles for Sale"],
+["Komm, gib mir deine Hand","Past Masters"],["Lady Madonna","Past Masters"],["Let It Be","Let It Be"],
+["Little Child","With the Beatles"],["The Long and Winding Road","Let It Be"],["Long Tall Sally","Past Masters"],
+["Long, Long, Long","The Beatles (White Album)"],["Love Me Do","Please Please Me"],["Love You To","Revolver"],
+["Lovely Rita","Sgt. Pepper's"],["Lucy in the Sky with Diamonds","Sgt. Pepper's"],["Maggie Mae","Let It Be"],
+["Magical Mystery Tour","Magical Mystery Tour"],["Martha My Dear","The Beatles (White Album)"],["Matchbox","Past Masters"],
+["Maxwell's Silver Hammer","Abbey Road"],["Mean Mr. Mustard","Abbey Road"],["Michelle","Rubber Soul"],
+["Misery","Please Please Me"],["Money (That's What I Want)","With the Beatles"],["Mother Nature's Son","The Beatles (White Album)"],
+["Mr. Moonlight","Beatles for Sale"],["The Night Before","Help!"],["No Reply","Beatles for Sale"],
+["Norwegian Wood (This Bird Has Flown)","Rubber Soul"],["Not a Second Time","With the Beatles"],["Nowhere Man","Rubber Soul"],
+["Ob-La-Di, Ob-La-Da","The Beatles (White Album)"],["Octopus's Garden","Abbey Road"],["Oh! Darling","Abbey Road"],
+["Old Brown Shoe","Past Masters"],["One After 909","Let It Be"],["Only a Northern Song","Yellow Submarine"],
+["Paperback Writer","Past Masters"],["Penny Lane","Magical Mystery Tour"],["Piggies","The Beatles (White Album)"],
+["Please Mr. Postman","With the Beatles"],["Please Please Me","Please Please Me"],["Polythene Pam","Abbey Road"],
+["P.S. I Love You","Please Please Me"],["Rain","Past Masters"],["Revolution","Past Masters"],
+["Revolution 1","The Beatles (White Album)"],["Revolution 9","The Beatles (White Album)"],["Rock and Roll Music","Beatles for Sale"],
+["Rocky Raccoon","The Beatles (White Album)"],["Roll Over Beethoven","With the Beatles"],["Run for Your Life","Rubber Soul"],
+["Savoy Truffle","The Beatles (White Album)"],["Sexy Sadie","The Beatles (White Album)"],["Sgt. Pepper's Lonely Hearts Club Band","Sgt. Pepper's"],
+["Sgt. Pepper's Lonely Hearts Club Band (Reprise)","Sgt. Pepper's"],["She Came In Through the Bathroom Window","Abbey Road"],["She Loves You","Past Masters"],
+["She Said She Said","Revolver"],["She's a Woman","Past Masters"],["She's Leaving Home","Sgt. Pepper's"],
+["Slow Down","Past Masters"],["Something","Abbey Road"],["Strawberry Fields Forever","Magical Mystery Tour"],
+["Sun King","Abbey Road"],["A Taste of Honey","Please Please Me"],["Taxman","Revolver"],
+["Tell Me What You See","Help!"],["Tell Me Why","A Hard Day's Night"],["Thank You Girl","Past Masters"],
+["There's a Place","Please Please Me"],["Things We Said Today","A Hard Day's Night"],["Think for Yourself","Rubber Soul"],
+["This Boy","Past Masters"],["Ticket to Ride","Help!"],["Till There Was You","With the Beatles"],
+["Tomorrow Never Knows","Revolver"],["Twist and Shout","Please Please Me"],["Two of Us","Let It Be"],
+["Wait","Rubber Soul"],["We Can Work It Out","Past Masters"],["What Goes On","Rubber Soul"],
+["What You're Doing","Beatles for Sale"],["When I Get Home","A Hard Day's Night"],["When I'm Sixty-Four","Sgt. Pepper's"],
+["While My Guitar Gently Weeps","The Beatles (White Album)"],["Why Don't We Do It in the Road?","The Beatles (White Album)"],["Wild Honey Pie","The Beatles (White Album)"],
+["With a Little Help from My Friends","Sgt. Pepper's"],["Within You Without You","Sgt. Pepper's"],["The Word","Rubber Soul"],
+["Words of Love","Beatles for Sale"],["Yellow Submarine","Revolver"],["Yer Blues","The Beatles (White Album)"],
+["Yes It Is","Past Masters"],["Yesterday","Help!"],["You Can't Do That","A Hard Day's Night"],
+["You Know My Name (Look Up the Number)","Past Masters"],["You Like Me Too Much","Help!"],["You Never Give Me Your Money","Abbey Road"],
+["You Really Got a Hold on Me","With the Beatles"],["You Won't See Me","Rubber Soul"],["Your Mother Should Know","Magical Mystery Tour"],
+["You're Going to Lose That Girl","Help!"],["You've Got to Hide Your Love Away","Help!"]
+].map(([title, album]) => ({ title, album }));
+
+function slugify(title){
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+let currentUser = null;
+let ratingsMap = {};
+let matches = [];
+let picked = { A: null, B: null };
+let searchState = { A: "", B: "" };
+let sortCol = "elo", sortDir = "desc";
+let tableFilter = "";
+let onlyPlayed = true;
+let listenersAttached = false;
+let unsubRatings = null, unsubMatches = null;
+
+function defaultRating(song){
+  return { title: song.title, album: song.album, elo: START_ELO, played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 };
+}
+function getRating(song){
+  return ratingsMap[slugify(song.title)] || defaultRating(song);
+}
+function marginMultiplier(gd){
+  if (gd === 0) return 1;
+  return Math.min(1 + Math.log(gd) * 0.7, 3);
+}
+
+const GOOGLE_ICON = '<svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.4 29.3 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.3 1 7.3 2.8l5.7-5.7C33.6 6.5 29 4.5 24 4.5 12.7 4.5 3.5 13.7 3.5 25S12.7 45.5 24 45.5 44.5 36.3 44.5 25c0-1.6-.2-3.1-.4-4.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 16 18.9 13 24 13c2.8 0 5.3 1 7.3 2.8l5.7-5.7C33.6 6.5 29 4.5 24 4.5c-7.5 0-14 4.2-17.7 10.2z"/><path fill="#4CAF50" d="M24 45.5c5 0 9.6-1.9 13-5.1l-6-5c-1.9 1.3-4.4 2.1-7 2.1-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.9 41.2 16.4 45.5 24 45.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.3 5.6l6 5c-.4.4 6.9-5.1 6.9-15.6 0-1.6-.2-3.1-.3-4.5z"/></svg>';
+
+function renderAccountBar(){
+  const bar = document.getElementById("accountBar");
+  if (!currentUser) { bar.innerHTML = ""; return; }
+  const photo = currentUser.photoURL ? '<img src="' + currentUser.photoURL + '" alt="">' : "";
+  bar.innerHTML = '<div class="bmd-account">' + photo + '<span>' + (currentUser.displayName || currentUser.email || "Signed in") +
+    '</span><button id="signOutBtn">Sign out</button></div>';
+  document.getElementById("signOutBtn").addEventListener("click", () => signOut(auth));
+}
+
+function renderSignIn(){
+  document.getElementById("bmdLoading").style.display = "none";
+  const app_ = document.getElementById("bmdApp");
+  app_.style.display = "block";
+  app_.innerHTML = '<div class="bmd-signin-card">' +
+    '<p>Sign in with Google to start your own Matchday tracker.<br>Your rankings are private to your account.</p>' +
+    '<button class="bmd-google-btn" id="googleSignInBtn">' + GOOGLE_ICON + ' Sign in with Google</button>' +
+    '</div>';
+  document.getElementById("googleSignInBtn").addEventListener("click", () => {
+    signInWithRedirect(auth, provider);
+  });
+}
+
+getRedirectResult(auth).catch(err => console.error("Redirect sign-in error", err));
+
+onAuthStateChanged(auth, user => {
+  currentUser = user;
+  renderAccountBar();
+  if (unsubRatings) { unsubRatings(); unsubRatings = null; }
+  if (unsubMatches) { unsubMatches(); unsubMatches = null; }
+  listenersAttached = false;
+  ratingsMap = {};
+  matches = [];
+  picked = { A: null, B: null };
+  searchState = { A: "", B: "" };
+
+  if (user) {
+    attachListeners(user.uid);
+  } else {
+    renderSignIn();
+  }
+});
+
+function attachListeners(uid){
+  const ratingsCol = collection(db, "users", uid, "ratings");
+  const matchesCol = collection(db, "users", uid, "matches");
+
+  unsubRatings = onSnapshot(ratingsCol, snap => {
+    const next = {};
+    snap.forEach(d => next[d.id] = d.data());
+    ratingsMap = next;
+    if (!listenersAttached) { listenersAttached = true; boot(); }
+    else { renderTableOnly(); refreshPickedPanels(); renderFooterCount(); }
+  }, err => console.error("Ratings sync error", err));
+
+  unsubMatches = onSnapshot(query(matchesCol, orderBy("ts", "desc"), limit(30)), snap => {
+    matches = snap.docs.map(d => d.data());
+    if (listenersAttached) renderLogOnly();
+  }, err => console.error("Matches sync error", err));
+}
+
+function boot(){
+  document.getElementById("bmdLoading").style.display = "none";
+  document.getElementById("bmdApp").style.display = "block";
+  render();
+}
+
+async function recordMatch(songA, songB, scoreA, scoreB){
+  const uid = currentUser.uid;
+  const slugA = slugify(songA.title), slugB = slugify(songB.title);
+  await runTransaction(db, async (tx) => {
+    const refA = doc(db, "users", uid, "ratings", slugA);
+    const refB = doc(db, "users", uid, "ratings", slugB);
+    const [snapA, snapB] = await Promise.all([tx.get(refA), tx.get(refB)]);
+    const ra = snapA.exists() ? snapA.data() : defaultRating(songA);
+    const rb = snapB.exists() ? snapB.data() : defaultRating(songB);
+
+    const gd = Math.abs(scoreA - scoreB);
+    const mult = marginMultiplier(gd);
+    const expA = 1 / (1 + Math.pow(10, (rb.elo - ra.elo) / 400));
+    const expB = 1 - expA;
+    let resA, resB;
+    if (scoreA > scoreB) { resA = 1; resB = 0; }
+    else if (scoreA < scoreB) { resA = 0; resB = 1; }
+    else { resA = 0.5; resB = 0.5; }
+    const newEloA = ra.elo + K * mult * (resA - expA);
+    const newEloB = rb.elo + K * mult * (resB - expB);
+
+    const upd = (r, song, myScore, oppScore, res, newElo) => ({
+      title: song.title, album: song.album, elo: newElo,
+      played: (r.played || 0) + 1,
+      w: (r.w || 0) + (res === 1 ? 1 : 0),
+      d: (r.d || 0) + (res === 0.5 ? 1 : 0),
+      l: (r.l || 0) + (res === 0 ? 1 : 0),
+      gf: (r.gf || 0) + myScore,
+      ga: (r.ga || 0) + oppScore
+    });
+
+    tx.set(refA, upd(ra, songA, scoreA, scoreB, resA, newEloA));
+    tx.set(refB, upd(rb, songB, scoreB, scoreA, resB, newEloB));
+
+    const matchRef = doc(collection(db, "users", uid, "matches"));
+    tx.set(matchRef, {
+      a: songA.title, b: songB.title, sa: scoreA, sb: scoreB,
+      da: newEloA - ra.elo, db: newEloB - rb.elo, ts: Date.now()
+    });
+  });
+}
+
+async function clearAllData(){
+  const uid = currentUser.uid;
+  const ratingsSnap = await getDocs(collection(db, "users", uid, "ratings"));
+  const matchesSnap = await getDocs(collection(db, "users", uid, "matches"));
+  const allDocs = [...ratingsSnap.docs, ...matchesSnap.docs];
+  for (let i = 0; i < allDocs.length; i += 400) {
+    const batch = writeBatch(db);
+    allDocs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
+}
+
+function searchSongs(q){
+  if (!q) return [];
+  const lower = q.toLowerCase();
+  return SONGS.filter(s => s.title.toLowerCase().includes(lower)).slice(0, 8);
+}
+function fmtElo(n){ return Math.round(n); }
+function fmtDelta(n){ const r = Math.round(n); return (r >= 0 ? "+" : "") + r; }
+function totalMatchesCount(){
+  let sum = 0;
+  Object.values(ratingsMap).forEach(r => sum += (r.played || 0));
+  return Math.round(sum / 2);
+}
+
+function render(){
+  const app_ = document.getElementById("bmdApp");
+  const canSubmit = picked.A && picked.B && picked.A.title !== picked.B.title;
+
+  app_.innerHTML =
+    '<div class="bmd-card">' +
+      '<div class="bmd-card-title">Kickoff &mdash; Search Two Songs</div>' +
+      '<div class="bmd-fixture">' +
+        '<div class="bmd-slot"><span class="bmd-slot-label">Home</span>' +
+          '<input class="bmd-search" id="searchA" placeholder="Search a song&hellip;" value="' + searchState.A + '" autocomplete="off">' +
+          '<div id="dropdownA"></div></div>' +
+        '<div class="bmd-vs">VS</div>' +
+        '<div class="bmd-slot"><span class="bmd-slot-label">Away</span>' +
+          '<input class="bmd-search" id="searchB" placeholder="Search a song&hellip;" value="' + searchState.B + '" autocomplete="off">' +
+          '<div id="dropdownB"></div></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">' +
+        '<div class="bmd-picked" id="pickedA">' + renderPicked(picked.A) + '</div>' +
+        '<div class="bmd-picked" id="pickedB">' + renderPicked(picked.B) + '</div>' +
+      '</div>' +
+      '<div class="bmd-score-row">' +
+        '<input type="number" min="0" max="99" class="bmd-score-input" id="scoreA" value="0">' +
+        '<div class="bmd-dash">&ndash;</div>' +
+        '<input type="number" min="0" max="99" class="bmd-score-input" id="scoreB" value="0">' +
+      '</div>' +
+      '<button class="bmd-btn" id="submitBtn" ' + (canSubmit ? "" : "disabled") + '>Full Time &mdash; Record Result</button>' +
+      '<div class="bmd-flash" id="flash"></div>' +
+    '</div>' +
+
+    '<div class="bmd-card">' +
+      '<div class="bmd-card-title">League Table</div>' +
+      '<div class="bmd-toolbar">' +
+        '<input id="tableFilter" placeholder="Filter table by song or album&hellip;" value="' + tableFilter + '">' +
+        '<label><input type="checkbox" id="onlyPlayed" ' + (onlyPlayed ? "checked" : "") + '> Played only</label>' +
+      '</div>' +
+      '<div id="tableWrap" style="overflow-x:auto;">' + renderTable() + '</div>' +
+    '</div>' +
+
+    '<div class="bmd-card">' +
+      '<div class="bmd-card-title">Recent Results</div>' +
+      '<div class="bmd-log" id="logWrap">' + renderLog() + '</div>' +
+    '</div>' +
+
+    '<div class="bmd-footer">' +
+      '<span id="footerCount">' + SONGS.length + ' songs &middot; ' + totalMatchesCount() + ' matches logged</span>' +
+      '<button id="resetBtn">Clear my data</button>' +
+    '</div>';
+
+  document.getElementById("searchA").addEventListener("input", e => onSearchInput("A", e.target.value));
+  document.getElementById("searchB").addEventListener("input", e => onSearchInput("B", e.target.value));
+  document.getElementById("submitBtn").addEventListener("click", onSubmit);
+  document.getElementById("resetBtn").addEventListener("click", onReset);
+  document.getElementById("tableFilter").addEventListener("input", e => { tableFilter = e.target.value; renderTableOnly(); });
+  document.getElementById("onlyPlayed").addEventListener("change", e => { onlyPlayed = e.target.checked; renderTableOnly(); });
+  attachSortHandlers();
+  renderDropdown("A");
+  renderDropdown("B");
+}
+
+function attachSortHandlers(){
+  document.querySelectorAll("[data-sort]").forEach(th => {
+    th.addEventListener("click", () => {
+      const col = th.getAttribute("data-sort");
+      if (sortCol === col) sortDir = sortDir === "desc" ? "asc" : "desc";
+      else { sortCol = col; sortDir = "desc"; }
+      renderTableOnly();
+    });
+  });
+}
+
+function renderPicked(song){
+  if (!song) return '<div class="bmd-empty">No song selected yet</div>';
+  const r = getRating(song);
+  return '<div class="name">' + song.title + '</div><div class="meta">' + song.album +
+    '</div><div class="rating">Elo ' + fmtElo(r.elo) + ' &middot; ' + r.played + ' played</div>';
+}
+function refreshPickedPanels(){
+  const a = document.getElementById("pickedA"), b = document.getElementById("pickedB");
+  if (a) a.innerHTML = renderPicked(picked.A);
+  if (b) b.innerHTML = renderPicked(picked.B);
+}
+function renderFooterCount(){
+  const el = document.getElementById("footerCount");
+  if (el) el.textContent = SONGS.length + " songs \u00b7 " + totalMatchesCount() + " matches logged";
+}
+
+function renderTableOnly(){
+  const wrap = document.getElementById("tableWrap");
+  if (!wrap) return;
+  wrap.innerHTML = renderTable();
+  attachSortHandlers();
+}
+function renderLogOnly(){
+  const wrap = document.getElementById("logWrap");
+  if (!wrap) return;
+  wrap.innerHTML = renderLog();
+}
+
+function renderTable(){
+  let rows = SONGS.map(s => ({ song: s, r: getRating(s) }));
+  if (onlyPlayed) rows = rows.filter(x => x.r.played > 0);
+  if (tableFilter) {
+    const lower = tableFilter.toLowerCase();
+    rows = rows.filter(x => x.song.title.toLowerCase().includes(lower) || x.song.album.toLowerCase().includes(lower));
+  }
+  rows.forEach(x => x.gd = x.r.gf - x.r.ga);
+  rows.sort((a, b) => {
+    let av, bv;
+    switch(sortCol){
+      case "song": av = a.song.title; bv = b.song.title; break;
+      case "played": av = a.r.played; bv = b.r.played; break;
+      case "gd": av = a.gd; bv = b.gd; break;
+      default: av = a.r.elo; bv = b.r.elo;
+    }
+    if (typeof av === "string") return sortDir === "desc" ? bv.localeCompare(av) : av.localeCompare(bv);
+    return sortDir === "desc" ? bv - av : av - bv;
+  });
+  if (rows.length === 0){
+    return '<div class="bmd-empty" style="padding:10px 0;">No matches yet ' + (onlyPlayed ? "&mdash; play a fixture above" : "matching that filter") + '.</div>';
+  }
+  const bodyRows = rows.map((x, i) =>
+    '<tr><td class="rank">' + (i+1) + '</td>' +
+    '<td>' + x.song.title + '<div class="song-album">' + x.song.album + '</div></td>' +
+    '<td class="num">' + fmtElo(x.r.elo) + '</td>' +
+    '<td class="num">' + x.r.played + '</td>' +
+    '<td class="num">' + x.r.w + '-' + x.r.d + '-' + x.r.l + '</td>' +
+    '<td class="num ' + (x.gd > 0 ? 'gd-pos' : x.gd < 0 ? 'gd-neg' : '') + '">' + (x.gd > 0 ? '+' : '') + x.gd + '</td></tr>'
+  ).join("");
+  return '<table class="bmd-table"><thead><tr>' +
+      '<th></th><th data-sort="song">Song</th><th class="num" data-sort="elo">Elo</th>' +
+      '<th class="num" data-sort="played">P</th><th class="num">W-D-L</th><th class="num" data-sort="gd">GD</th>' +
+    '</tr></thead><tbody>' + bodyRows + '</tbody></table>';
+}
+
+function renderLog(){
+  if (!matches.length) return '<div class="bmd-log-empty">No matches logged yet.</div>';
+  return matches.map(m =>
+    '<div class="bmd-log-row"><span>' + m.a + ' <span class="lscore">' + m.sa + '&ndash;' + m.sb + '</span> ' + m.b + '</span>' +
+    '<span style="color:' + (m.da >= 0 ? '#1f5c3f' : '#a83232') + ';white-space:nowrap;">' + fmtDelta(m.da) + ' / ' + fmtDelta(m.db) + '</span></div>'
+  ).join("");
+}
+
+function onSearchInput(slot, value){ searchState[slot] = value; renderDropdown(slot); }
+
+function renderDropdown(slot){
+  const el = document.getElementById("dropdown" + slot);
+  if (!el) return;
+  const q = searchState[slot];
+  const results = searchSongs(q);
+  if (!q || results.length === 0){ el.innerHTML = ""; el.className = ""; return; }
+  el.className = "bmd-dropdown";
+  el.innerHTML = results.map(s =>
+    '<div class="bmd-opt" data-title="' + s.title.replace(/"/g,'&quot;') + '">' + s.title +
+    '<small>' + s.album + ' &middot; Elo ' + fmtElo(getRating(s).elo) + '</small></div>'
+  ).join("");
+  el.querySelectorAll(".bmd-opt").forEach(opt => {
+    opt.addEventListener("click", () => {
+      const title = opt.getAttribute("data-title");
+      const song = SONGS.find(s => s.title === title);
+      picked[slot] = song;
+      searchState[slot] = song.title;
+      render();
+    });
+  });
+}
+
+async function onSubmit(){
+  const btn = document.getElementById("submitBtn");
+  const scoreA = parseInt(document.getElementById("scoreA").value, 10) || 0;
+  const scoreB = parseInt(document.getElementById("scoreB").value, 10) || 0;
+  if (!picked.A || !picked.B || picked.A.title === picked.B.title) return;
+  btn.disabled = true;
+  btn.textContent = "Recording…";
+  try {
+    await recordMatch(picked.A, picked.B, scoreA, scoreB);
+    picked = { A: null, B: null };
+    searchState = { A: "", B: "" };
+    render();
+    document.getElementById("flash").textContent = "Recorded: " + scoreA + "\u2013" + scoreB + ". Ready for the next matchup.";
+  } catch(e){
+    console.error(e);
+    document.getElementById("flash").textContent = "Couldn't save — check your connection and try again.";
+    btn.disabled = false;
+    btn.textContent = "Full Time — Record Result";
+  }
+}
+
+async function onReset(){
+  if (!confirm("Clear all of your matchup data? This can't be undone.")) return;
+  await clearAllData();
+}
+</script>
+</body>
+</html>
