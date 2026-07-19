@@ -120,7 +120,7 @@ table.bmd-table .gd-neg { color: var(--red); }
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
+  getAuth, GoogleAuthProvider, signInWithPopup,
   onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -256,20 +256,28 @@ function renderAccountBar(){
   document.getElementById("signOutBtn").addEventListener("click", () => signOut(auth));
 }
 
-function renderSignIn(){
+function renderSignIn(errorMsg){
   document.getElementById("bmdLoading").style.display = "none";
   const app_ = document.getElementById("bmdApp");
   app_.style.display = "block";
   app_.innerHTML = '<div class="bmd-signin-card">' +
     '<p>Sign in with Google to start your own Matchday tracker.<br>Your rankings are private to your account.</p>' +
     '<button class="bmd-google-btn" id="googleSignInBtn">' + GOOGLE_ICON + ' Sign in with Google</button>' +
+    (errorMsg ? '<p style="color:#a83232;font-size:12px;margin-top:16px;">' + errorMsg + '</p>' : '') +
     '</div>';
-  document.getElementById("googleSignInBtn").addEventListener("click", () => {
-    signInWithRedirect(auth, provider);
+  document.getElementById("googleSignInBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("googleSignInBtn");
+    btn.disabled = true;
+    try {
+      await signInWithPopup(auth, provider);
+      // onAuthStateChanged handles the rest
+    } catch (err) {
+      console.error("Sign-in error", err);
+      renderSignIn("Sign-in failed: " + (err.code || err.message || "unknown error") +
+        ". If your browser blocked a popup, allow popups for this site and try again.");
+    }
   });
 }
-
-getRedirectResult(auth).catch(err => console.error("Redirect sign-in error", err));
 
 onAuthStateChanged(auth, user => {
   currentUser = user;
