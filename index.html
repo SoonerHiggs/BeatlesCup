@@ -96,6 +96,20 @@ table.bmd-table .gd-neg { color: var(--red); }
 .bmd-log-row { padding: 6px 2px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; }
 .bmd-log-row .lscore { font-family: 'Anton', sans-serif; color: var(--gold); white-space: nowrap; }
 .bmd-log-empty { color: var(--ink-soft); font-style: italic; font-size: 12px; padding: 6px 2px; }
+.bmd-log-action {
+  background: none; border: 1px solid var(--line); color: var(--ink-soft);
+  font-family: 'Spectral SC', serif; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 3px 6px; cursor: pointer;
+}
+.bmd-log-action:hover { border-color: var(--ink); color: var(--ink); }
+.bmd-log-action[data-action="delete"]:hover { border-color: var(--red); color: var(--red); }
+.bmd-log-action[data-action="save"]:hover { border-color: var(--pitch); color: var(--pitch); }
+.bmd-log-action:disabled { opacity: 0.4; cursor: not-allowed; }
+.bmd-log-edit-input {
+  font-family: 'Anton', sans-serif; font-size: 15px; text-align: center;
+  border: 1px solid var(--ink); padding: 2px 0;
+}
+.bmd-log-editing { align-items: center; }
 
 .bmd-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 11px; color: var(--ink-soft); flex-wrap: wrap; gap: 6px; }
 .bmd-footer button { background: none; border: none; color: var(--red); text-decoration: underline; cursor: pointer; font-size: 11px; font-family: 'Spectral', serif; }
@@ -222,6 +236,11 @@ const SONGS = [
 function slugify(title){
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
+function normalizeApos(s){
+  return s.replace(/[\u2018\u2019\u02BC\u00B4\u0060]/g, "'");
+}
+const slugToSong = {};
+SONGS.forEach(s => { slugToSong[slugify(s.title)] = s; });
 
 let currentUser = null;
 let ratingsMap = {};
@@ -233,6 +252,8 @@ let tableFilter = "";
 let onlyPlayed = true;
 let listenersAttached = false;
 let unsubRatings = null, unsubMatches = null;
+let editingMatchId = null;
+let logBusy = false;
 
 function defaultRating(song){
   return { title: song.title, album: song.album, elo: START_ELO, played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 };
@@ -310,7 +331,7 @@ function attachListeners(uid){
   }, err => console.error("Ratings sync error", err));
 
   unsubMatches = onSnapshot(query(matchesCol, orderBy("ts", "desc"), limit(30)), snap => {
-    matches = snap.docs.map(d => d.data());
+    matches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (listenersAttached) renderLogOnly();
   }, err => console.error("Matches sync error", err));
 }
@@ -363,6 +384,93 @@ async function recordMatch(songA, songB, scoreA, scoreB){
   });
 }
 
+// Replays a full match history in chronological order to produce a consistent
+// set of ratings and per-match Elo deltas. Used whenever a past match is
+// edited or deleted, since Elo is order-dependent and can't be patched in place.
+function replayMatches(matchesAsc){
+  const ratings = {};
+  const replayed = [];
+  function getR(song){
+    const slug = slugify(song.title);
+    if (!ratings[slug]) ratings[slug] = defaultRating(song);
+    return ratings[slug];
+  }
+  for (const m of matchesAsc) {
+    const songA = slugToSong[slugify(m.a)] || { title: m.a, album: "" };
+    const songB = slugToSong[slugify(m.b)] || { title: m.b, album: "" };
+    const ra = getR(songA), rb = getR(songB);
+    const gd = Math.abs(m.sa - m.sb);
+    const mult = marginMultiplier(gd);
+    const expA = 1 / (1 + Math.pow(10, (rb.elo - ra.elo) / 400));
+    const expB = 1 - expA;
+    let resA, resB;
+    if (m.sa > m.sb) { resA = 1; resB = 0; }
+    else if (m.sa < m.sb) { resA = 0; resB = 1; }
+    else { resA = 0.5; resB = 0.5; }
+    const newEloA = ra.elo + K * mult * (resA - expA);
+    const newEloB = rb.elo + K * mult * (resB - expB);
+    const upd = (r, song, myScore, oppScore, res, newElo) => ({
+      title: song.title, album: song.album, elo: newElo,
+      played: (r.played || 0) + 1,
+      w: (r.w || 0) + (res === 1 ? 1 : 0),
+      d: (r.d || 0) + (res === 0.5 ? 1 : 0),
+      l: (r.l || 0) + (res === 0 ? 1 : 0),
+      gf: (r.gf || 0) + myScore,
+      ga: (r.ga || 0) + oppScore
+    });
+    const daVal = newEloA - ra.elo, dbVal = newEloB - rb.elo;
+    ratings[slugify(songA.title)] = upd(ra, songA, m.sa, m.sb, resA, newEloA);
+    ratings[slugify(songB.title)] = upd(rb, songB, m.sb, m.sa, resB, newEloB);
+    replayed.push({ id: m.id, a: m.a, b: m.b, sa: m.sa, sb: m.sb, ts: m.ts, da: daVal, db: dbVal });
+  }
+  return { ratings, replayed };
+}
+
+async function fetchFullHistoryAsc(uid){
+  const snap = await getDocs(query(collection(db, "users", uid, "matches"), orderBy("ts", "asc")));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function commitReplay(uid, ratings, replayed){
+  const existingRatingsSnap = await getDocs(collection(db, "users", uid, "ratings"));
+  const existingIds = new Set(existingRatingsSnap.docs.map(d => d.id));
+  const newIds = new Set(Object.keys(ratings));
+
+  const ops = [];
+  existingIds.forEach(id => { if (!newIds.has(id)) ops.push({ type: "deleteRating", id }); });
+  Object.entries(ratings).forEach(([id, val]) => ops.push({ type: "setRating", id, val }));
+  replayed.forEach(m => ops.push({ type: "setMatch", id: m.id, val: { a: m.a, b: m.b, sa: m.sa, sb: m.sb, ts: m.ts, da: m.da, db: m.db } }));
+
+  for (let i = 0; i < ops.length; i += 400) {
+    const batch = writeBatch(db);
+    ops.slice(i, i + 400).forEach(op => {
+      if (op.type === "deleteRating") batch.delete(doc(db, "users", uid, "ratings", op.id));
+      else if (op.type === "setRating") batch.set(doc(db, "users", uid, "ratings", op.id), op.val);
+      else if (op.type === "setMatch") batch.set(doc(db, "users", uid, "matches", op.id), op.val);
+    });
+    await batch.commit();
+  }
+}
+
+async function editMatch(matchId, newScoreA, newScoreB){
+  const uid = currentUser.uid;
+  const history = await fetchFullHistoryAsc(uid);
+  const idx = history.findIndex(m => m.id === matchId);
+  if (idx === -1) throw new Error("Match not found");
+  history[idx] = { ...history[idx], sa: newScoreA, sb: newScoreB };
+  const { ratings, replayed } = replayMatches(history);
+  await commitReplay(uid, ratings, replayed);
+}
+
+async function deleteMatch(matchId){
+  const uid = currentUser.uid;
+  const history = await fetchFullHistoryAsc(uid);
+  const remaining = history.filter(m => m.id !== matchId);
+  const { ratings, replayed } = replayMatches(remaining);
+  await commitReplay(uid, ratings, replayed);
+  await writeBatch(db).delete(doc(db, "users", uid, "matches", matchId)).commit();
+}
+
 async function clearAllData(){
   const uid = currentUser.uid;
   const ratingsSnap = await getDocs(collection(db, "users", uid, "ratings"));
@@ -377,8 +485,8 @@ async function clearAllData(){
 
 function searchSongs(q){
   if (!q) return [];
-  const lower = q.toLowerCase();
-  return SONGS.filter(s => s.title.toLowerCase().includes(lower)).slice(0, 8);
+  const lower = normalizeApos(q).toLowerCase();
+  return SONGS.filter(s => normalizeApos(s.title).toLowerCase().includes(lower)).slice(0, 8);
 }
 function fmtElo(n){ return Math.round(n); }
 function fmtDelta(n){ const r = Math.round(n); return (r >= 0 ? "+" : "") + r; }
@@ -443,6 +551,7 @@ function render(){
   document.getElementById("tableFilter").addEventListener("input", e => { tableFilter = e.target.value; renderTableOnly(); });
   document.getElementById("onlyPlayed").addEventListener("change", e => { onlyPlayed = e.target.checked; renderTableOnly(); });
   attachSortHandlers();
+  attachLogHandlers();
   renderDropdown("A");
   renderDropdown("B");
 }
@@ -484,6 +593,7 @@ function renderLogOnly(){
   const wrap = document.getElementById("logWrap");
   if (!wrap) return;
   wrap.innerHTML = renderLog();
+  attachLogHandlers();
 }
 
 function renderTable(){
@@ -524,10 +634,68 @@ function renderTable(){
 
 function renderLog(){
   if (!matches.length) return '<div class="bmd-log-empty">No matches logged yet.</div>';
-  return matches.map(m =>
-    '<div class="bmd-log-row"><span>' + m.a + ' <span class="lscore">' + m.sa + '&ndash;' + m.sb + '</span> ' + m.b + '</span>' +
-    '<span style="color:' + (m.da >= 0 ? '#1f5c3f' : '#a83232') + ';white-space:nowrap;">' + fmtDelta(m.da) + ' / ' + fmtDelta(m.db) + '</span></div>'
-  ).join("");
+  return matches.map(m => {
+    if (editingMatchId === m.id) {
+      return '<div class="bmd-log-row bmd-log-editing" data-id="' + m.id + '">' +
+        '<span style="flex:1;">' + m.a + ' <input type="number" min="0" max="99" class="bmd-log-edit-input" id="editSa" value="' + m.sa + '" style="width:40px;"> &ndash; ' +
+        '<input type="number" min="0" max="99" class="bmd-log-edit-input" id="editSb" value="' + m.sb + '" style="width:40px;"> ' + m.b + '</span>' +
+        '<span style="white-space:nowrap;">' +
+          '<button class="bmd-log-action" data-action="save" data-id="' + m.id + '">Save</button> ' +
+          '<button class="bmd-log-action" data-action="cancel" data-id="' + m.id + '">Cancel</button>' +
+        '</span></div>';
+    }
+    return '<div class="bmd-log-row" data-id="' + m.id + '">' +
+      '<span>' + m.a + ' <span class="lscore">' + m.sa + '&ndash;' + m.sb + '</span> ' + m.b + '</span>' +
+      '<span style="white-space:nowrap;display:flex;align-items:center;gap:8px;">' +
+        '<span style="color:' + (m.da >= 0 ? '#1f5c3f' : '#a83232') + ';">' + fmtDelta(m.da) + ' / ' + fmtDelta(m.db) + '</span>' +
+        '<button class="bmd-log-action" data-action="edit" data-id="' + m.id + '" ' + (logBusy ? "disabled" : "") + '>Edit</button>' +
+        '<button class="bmd-log-action" data-action="delete" data-id="' + m.id + '" ' + (logBusy ? "disabled" : "") + '>Delete</button>' +
+      '</span></div>';
+  }).join("");
+}
+
+function attachLogHandlers(){
+  const wrap = document.getElementById("logWrap");
+  if (!wrap) return;
+  wrap.querySelectorAll(".bmd-log-action").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const action = btn.getAttribute("data-action");
+      const id = btn.getAttribute("data-id");
+      if (action === "edit") {
+        editingMatchId = id;
+        renderLogOnly();
+      } else if (action === "cancel") {
+        editingMatchId = null;
+        renderLogOnly();
+      } else if (action === "save") {
+        const sa = parseInt(document.getElementById("editSa").value, 10) || 0;
+        const sb = parseInt(document.getElementById("editSb").value, 10) || 0;
+        logBusy = true;
+        btn.textContent = "Saving…";
+        try {
+          await editMatch(id, sa, sb);
+          editingMatchId = null;
+        } catch (e) {
+          console.error(e);
+          alert("Couldn't save the correction — check your connection and try again.");
+        } finally {
+          logBusy = false;
+        }
+      } else if (action === "delete") {
+        if (!confirm("Delete this match? Ratings will be recalculated without it.")) return;
+        logBusy = true;
+        renderLogOnly();
+        try {
+          await deleteMatch(id);
+        } catch (e) {
+          console.error(e);
+          alert("Couldn't delete the match — check your connection and try again.");
+        } finally {
+          logBusy = false;
+        }
+      }
+    });
+  });
 }
 
 function onSearchInput(slot, value){ searchState[slot] = value; renderDropdown(slot); }
