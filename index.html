@@ -81,6 +81,11 @@ body {
 .bmd-toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
 .bmd-toolbar input { flex: 1; min-width: 140px; padding: 7px 9px; border: 1px solid var(--ink); font-family: 'Spectral', serif; font-size: 13px; }
 .bmd-toolbar label { font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.bmd-filter-select {
+  padding: 7px 9px; border: 1px solid var(--ink); background: #fff; color: var(--ink);
+  font-family: 'Spectral', serif; font-size: 13px;
+}
+.bmd-table-count { font-size: 11px; color: var(--ink-soft); font-style: italic; margin-bottom: 8px; }
 
 table.bmd-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 table.bmd-table th { font-family: 'Spectral SC', serif; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; text-align: left; padding: 6px 5px; border-bottom: 2px solid var(--ink); color: var(--ink-soft); cursor: pointer; user-select: none; }
@@ -249,7 +254,7 @@ let picked = { A: null, B: null };
 let searchState = { A: "", B: "" };
 let sortCol = "elo", sortDir = "desc";
 let tableFilter = "";
-let onlyPlayed = true;
+let filterMode = "played"; // "played" | "unplayed" | "all"
 let listenersAttached = false;
 let unsubRatings = null, unsubMatches = null;
 let editingMatchId = null;
@@ -529,7 +534,11 @@ function render(){
       '<div class="bmd-card-title">League Table</div>' +
       '<div class="bmd-toolbar">' +
         '<input id="tableFilter" placeholder="Filter table by song or album&hellip;" value="' + tableFilter + '">' +
-        '<label><input type="checkbox" id="onlyPlayed" ' + (onlyPlayed ? "checked" : "") + '> Played only</label>' +
+        '<select id="filterMode" class="bmd-filter-select">' +
+          '<option value="played"' + (filterMode === "played" ? " selected" : "") + '>Played only</option>' +
+          '<option value="unplayed"' + (filterMode === "unplayed" ? " selected" : "") + '>Not yet scored</option>' +
+          '<option value="all"' + (filterMode === "all" ? " selected" : "") + '>All songs</option>' +
+        '</select>' +
       '</div>' +
       '<div id="tableWrap" style="overflow-x:auto;">' + renderTable() + '</div>' +
     '</div>' +
@@ -549,7 +558,11 @@ function render(){
   document.getElementById("submitBtn").addEventListener("click", onSubmit);
   document.getElementById("resetBtn").addEventListener("click", onReset);
   document.getElementById("tableFilter").addEventListener("input", e => { tableFilter = e.target.value; renderTableOnly(); });
-  document.getElementById("onlyPlayed").addEventListener("change", e => { onlyPlayed = e.target.checked; renderTableOnly(); });
+  document.getElementById("filterMode").addEventListener("change", e => {
+    filterMode = e.target.value;
+    if (filterMode === "unplayed") { sortCol = "song"; sortDir = "asc"; }
+    renderTableOnly();
+  });
   attachSortHandlers();
   attachLogHandlers();
   renderDropdown("A");
@@ -598,7 +611,8 @@ function renderLogOnly(){
 
 function renderTable(){
   let rows = SONGS.map(s => ({ song: s, r: getRating(s) }));
-  if (onlyPlayed) rows = rows.filter(x => x.r.played > 0);
+  if (filterMode === "played") rows = rows.filter(x => x.r.played > 0);
+  else if (filterMode === "unplayed") rows = rows.filter(x => x.r.played === 0);
   if (tableFilter) {
     const lower = tableFilter.toLowerCase();
     rows = rows.filter(x => x.song.title.toLowerCase().includes(lower) || x.song.album.toLowerCase().includes(lower));
@@ -616,8 +630,14 @@ function renderTable(){
     return sortDir === "desc" ? bv - av : av - bv;
   });
   if (rows.length === 0){
-    return '<div class="bmd-empty" style="padding:10px 0;">No matches yet ' + (onlyPlayed ? "&mdash; play a fixture above" : "matching that filter") + '.</div>';
+    const msg = filterMode === "played" ? "No matches yet &mdash; play a fixture above"
+      : filterMode === "unplayed" ? "Every song has been scored at least once &mdash; nice work"
+      : "No songs matching that filter";
+    return '<div class="bmd-empty" style="padding:10px 0;">' + msg + '.</div>';
   }
+  const countLine = filterMode === "unplayed"
+    ? '<div class="bmd-table-count">' + rows.length + ' of ' + SONGS.length + ' songs still unheard on Matchday</div>'
+    : '';
   const bodyRows = rows.map((x, i) =>
     '<tr><td class="rank">' + (i+1) + '</td>' +
     '<td>' + x.song.title + '<div class="song-album">' + x.song.album + '</div></td>' +
@@ -626,7 +646,7 @@ function renderTable(){
     '<td class="num">' + x.r.w + '-' + x.r.d + '-' + x.r.l + '</td>' +
     '<td class="num ' + (x.gd > 0 ? 'gd-pos' : x.gd < 0 ? 'gd-neg' : '') + '">' + (x.gd > 0 ? '+' : '') + x.gd + '</td></tr>'
   ).join("");
-  return '<table class="bmd-table"><thead><tr>' +
+  return countLine + '<table class="bmd-table"><thead><tr>' +
       '<th></th><th data-sort="song">Song</th><th class="num" data-sort="elo">Elo</th>' +
       '<th class="num" data-sort="played">P</th><th class="num">W-D-L</th><th class="num" data-sort="gd">GD</th>' +
     '</tr></thead><tbody>' + bodyRows + '</tbody></table>';
